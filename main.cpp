@@ -42,7 +42,8 @@ Vec3 Colour(const Ray& ray, Hitable *world, int depth)
 	}
 }
 
-void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int numOfSpheres, Hitable* world)
+void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int numOfSpheres, Hitable* world,
+				std::vector<Vec3> *Pixels)
 {
 	Vec3 colour(0.0f, 0.0f, 0.0f);
 	for (int spheres = 0; spheres < numOfSpheres; spheres++) 
@@ -59,25 +60,7 @@ void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int n
 	int outputG = int(255 * colour[1]);
 	int outputB = int(255 * colour[2]);
 
-	/**** Viewable Copy of Output ****/
-	std::ofstream output("output.ppm");
-
-	/** The P3 means the colors are in ASCII.
-	  * The xPixels is how many collums.
-	  * The yPixels is how many rows.
-	  * The final is 255 for max colour.
-	  * The Next time this is done is for the RGB triplets.
-	  * Outputting to a PPM file to view it elsewhere. **/
-	if (output.is_open())
-	{
-		output << "P3\n" << xPixels << " " << yPixels << "\n255\n";
-	}
-	/** These are those RGB triplets mentioned. **/
-	//for (Vec3 pixels : pixels)
-	{
-		output << outputR << " " << outputG << " " << outputB << "\n";
-	}
-	/** END **/
+	Pixels->insert(Pixels->begin() + (i + j), Vec3(outputR, outputG, outputB));
 }
 
 /** CORNELL WORLDS **/
@@ -369,11 +352,10 @@ Hitable *finalTest()
 
 int main()
 {
-	int xPixels = 800;
-	int yPixels = 400;
+	int xPixels = 200;
+	int yPixels = 200;
 	int numOfSpheres = 100;
 	
-
 	/**** WORLD SELECT ****/
 	/** CORNELL **/
 	//Hitable *world = cornell_box();
@@ -381,13 +363,13 @@ int main()
 	//Hitable *world = cornell_balls();
 	//Hitable *world = cornell_final();
 
-	//Hitable *world = twoSpheres();
-	//Hitable *world = twoPerlinSpheres();
-	//Hitable *world = earth();
-	//Hitable *world = sampleLight();
+	//Hitable *world = twoSpheres();		 // No Longer Works
+	//Hitable *world = twoPerlinSpheres();	 // No Longer Works
+	//Hitable *world = earth();				 // No Longer Works
+	//Hitable *world = sampleLight();		 // No Longer Works
 
 	/** RANDOM / FINAL TEST**/
-	//Hitable *world = randomScene();
+	//Hitable *world = randomScene();		 // No Longer Works
 	Hitable *world = final();
 
 	Vec3 lookFrom(478.0f, 278.0f, -600.0f);
@@ -397,11 +379,30 @@ int main()
 	float Aperture = 0.0f;
 	float FOV = 40.0f;
 
+	std::vector<Vec3> Pixels(xPixels * yPixels);
 	Camera camera(lookFrom, lookAt, Vec3(0.0f, 1.0f, 0.0f), FOV, float(xPixels) / float(yPixels), Aperture, DistanceToFocus, 0.0f, 1.0f);
 
 	for (int j = (yPixels - 1); j >= 0; j--) {
 		for (int i = 0; i < xPixels; i++) {
-			ProcessRay(camera, i, j, xPixels, yPixels, numOfSpheres, world);
+			ProcessRay(camera, i, j, xPixels, yPixels, numOfSpheres, world, &Pixels);
 		}
 	}
+
+	/**** Viewable Copy of Output ****/
+	std::ofstream output("output.ppm");
+
+	/** The P3 means the colors are in ASCII.
+	  * The xPixels is how many collums.
+	  * The yPixels is how many rows.
+	  * The final is 255 for max colour.
+	  * The Next time this is done is for the RGB triplets.
+	  * Outputting to a PPM file to view it elsewhere. **/
+	if (output.is_open()) {
+		output << "P3\n" << xPixels << " " << yPixels << "\n255\n";
+	}
+	/** These are those RGB triplets mentioned. **/
+	for (Vec3 pixel : Pixels) {
+		output << pixel.r() << " " << pixel.g() << " " << pixel.b() << "\n";
+	}
+	/** END **/
 }
