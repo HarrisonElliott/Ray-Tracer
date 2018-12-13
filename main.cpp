@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <random>
+#include <vector>
 
 /** MY INCLUDES **/
 #include "AARect.h"
@@ -25,24 +26,62 @@
 Vec3 Colour(const Ray& ray, Hitable *world, int depth)
 {
 	Hit_Record record;
-    if (world->hit(ray, 0.001f, FLT_MAX, record)) {
+	if (world->hit(ray, 0.001f, FLT_MAX, record)) {
 		Ray scattered;
-        Vec3 attenuation;
+		Vec3 attenuation;
 		Vec3 emitted = record.mat_ptr->emitted(record.u, record.v, record.p);
-        if (depth < 50 && record.mat_ptr->scatter(ray, record, attenuation, scattered)) {
-            return emitted + attenuation*Colour(scattered, world, depth + 1.0f);
-        }
-        else {
-            return emitted;
-        }
-    }
-    else {
-        return Vec3(0.0f, 0.0f, 0.0f);
-    }
+		if (depth < 50 && record.mat_ptr->scatter(ray, record, attenuation, scattered)) {
+			return emitted + attenuation * Colour(scattered, world, depth + 1.0f);
+		}
+		else {
+			return emitted;
+		}
+	}
+	else {
+		return Vec3(0.0f, 0.0f, 0.0f);
+	}
+}
+
+void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int numOfSpheres, Hitable* world)
+{
+	Vec3 colour(0.0f, 0.0f, 0.0f);
+	for (int spheres = 0; spheres < numOfSpheres; spheres++) 
+	{
+		float u = float(i + RANDOM_FLOAT) / float(xPixels);
+		float v = float(j + RANDOM_FLOAT) / float(yPixels);
+		Ray ray = camera.GetRay(u, v);
+		Vec3 p = ray.pointAtParameter(2.0f);
+		colour += Colour(ray, world, 0);
+	}
+	colour /= float(numOfSpheres);
+	colour = Vec3(sqrt(colour[0]), sqrt(colour[1]), sqrt(colour[2]));
+	int outputR = int(255 * colour[0]);
+	int outputG = int(255 * colour[1]);
+	int outputB = int(255 * colour[2]);
+
+	/**** Viewable Copy of Output ****/
+	std::ofstream output("output.ppm");
+
+	/** The P3 means the colors are in ASCII.
+	  * The xPixels is how many collums.
+	  * The yPixels is how many rows.
+	  * The final is 255 for max colour.
+	  * The Next time this is done is for the RGB triplets.
+	  * Outputting to a PPM file to view it elsewhere. **/
+	if (output.is_open())
+	{
+		output << "P3\n" << xPixels << " " << yPixels << "\n255\n";
+	}
+	/** These are those RGB triplets mentioned. **/
+	//for (Vec3 pixels : pixels)
+	{
+		output << outputR << " " << outputG << " " << outputB << "\n";
+	}
+	/** END **/
 }
 
 /** CORNELL WORLDS **/
-Hitable *cornell_box() 
+Hitable *cornell_box()
 {
 	Hitable **list = new Hitable*[8];
 	int i = 0;
@@ -57,9 +96,9 @@ Hitable *cornell_box()
 	list[i++] = new xzRect(0, 555, 0, 555, 0, white);
 	list[i++] = new FlipNormals(new xyRect(0, 555, 0, 555, 555, white));
 	list[i++] = new Translate(new RotateY(new Box(Vec3(0, 0, 0),
-				Vec3(165, 165, 165), white), -18), Vec3(130, 0, 65));
+		Vec3(165, 165, 165), white), -18), Vec3(130, 0, 65));
 	list[i++] = new Translate(new RotateY(new Box(Vec3(0, 0, 0),
-				Vec3(165, 330, 165), white), 15), Vec3(265, 0, 295));
+		Vec3(165, 330, 165), white), 15), Vec3(265, 0, 295));
 	return new HitableList(list, i);
 }
 
@@ -78,9 +117,9 @@ Hitable *cornell_smoke()
 	list[i++] = new xzRect(0, 555, 0, 555, 0, white);
 	list[i++] = new FlipNormals(new xyRect(0, 555, 0, 555, 555, white));
 	Hitable *b1 = new Translate(new RotateY(new Box(Vec3(0, 0, 0),
-				Vec3(165, 165, 165), white), -18), Vec3(130, 0, 65));
+		Vec3(165, 165, 165), white), -18), Vec3(130, 0, 65));
 	Hitable *b2 = new Translate(new RotateY(new Box(Vec3(0, 0, 0),
-				Vec3(165, 330, 165), white), 15), Vec3(265, 0, 295));
+		Vec3(165, 330, 165), white), 15), Vec3(265, 0, 295));
 	list[i++] = new ConstantMedium(b1, 0.01, new ConstantTexture(Vec3(1.0, 1.0, 1.0)));
 	list[i++] = new ConstantMedium(b2, 0.01, new ConstantTexture(Vec3(0.0, 0.0, 0.0)));
 	return new HitableList(list, i);
@@ -154,13 +193,13 @@ Hitable *sampleLight()
 	list[0] = new Sphere(Vec3(0, -1000, 0), 1000, new Lambertian(pertext));
 	list[1] = new Sphere(Vec3(0, 2, 0), 2, new Lambertian(pertext));
 	list[2] = new Sphere(Vec3(0, 6, 0), 1, new DiffuseLight(new ConstantTexture(Vec3(4, 4, 4))));
-	list[3] = new xyRect(3, 5, 1, 3, -2, new DiffuseLight(new ConstantTexture(Vec3(4,4,4))));
+	list[3] = new xyRect(3, 5, 1, 3, -2, new DiffuseLight(new ConstantTexture(Vec3(4, 4, 4))));
 	return new HitableList(list, 4);
 }
 
 
 /** SPHERE WORLDS **/
-Hitable *twoSpheres() 
+Hitable *twoSpheres()
 {
 	Texture *checker = new CheckerTexture(new ConstantTexture(Vec3(0.2, 0.3, 0.1)), new ConstantTexture(Vec3(0.9, 0.9, 0.9)));
 	int n = 50;
@@ -182,46 +221,46 @@ Hitable *twoPerlinSpheres()
 
 
 /** RANDOM WORLD **/
-Hitable *randomScene() 
+Hitable *randomScene()
 {
-    int n = 50000;
-    Hitable **list = new Hitable*[n + 1];
+	int n = 50000;
+	Hitable **list = new Hitable*[n + 1];
 	Texture *checker = new CheckerTexture(new ConstantTexture(Vec3(0.2, 0.3, 0.1)), new ConstantTexture(Vec3(0.9, 0.9, 0.9)));
-    list[0] = new Sphere(Vec3(0, -1000, 0), 1000, new Lambertian(checker));
-    int i = 1;
-    for (int a = -10; a < 10; a++) {
-        for (int b = -10; b < 10; b++) {
-            float choose_mat = RANDOM_FLOAT;
+	list[0] = new Sphere(Vec3(0, -1000, 0), 1000, new Lambertian(checker));
+	int i = 1;
+	for (int a = -10; a < 10; a++) {
+		for (int b = -10; b < 10; b++) {
+			float choose_mat = RANDOM_FLOAT;
 			Vec3 center(a + 0.9*RANDOM_FLOAT, 0.2, b + 0.9*RANDOM_FLOAT);
-            if ((center - Vec3(4, 0.2, 0)).length() > 0.9) {
-                if (choose_mat < 0.8) { 
+			if ((center - Vec3(4, 0.2, 0)).length() > 0.9) {
+				if (choose_mat < 0.8) {
 					/** DIFFUSE **/
-                    list[i++] = new MovingSphere(center, center+ Vec3(0, 0.5*RANDOM_FLOAT, 0), 0.0, 1.0, 0.2,
-									new Lambertian(new ConstantTexture(Vec3(RANDOM_FLOAT*RANDOM_FLOAT, RANDOM_FLOAT*RANDOM_FLOAT, RANDOM_FLOAT*RANDOM_FLOAT))));
-                }
-                else if (choose_mat < 0.95) { 
+					list[i++] = new MovingSphere(center, center + Vec3(0, 0.5*RANDOM_FLOAT, 0), 0.0, 1.0, 0.2,
+						new Lambertian(new ConstantTexture(Vec3(RANDOM_FLOAT*RANDOM_FLOAT, RANDOM_FLOAT*RANDOM_FLOAT, RANDOM_FLOAT*RANDOM_FLOAT))));
+				}
+				else if (choose_mat < 0.95) {
 					/** METAL **/
-                    list[i++] = new Sphere(center, 0.2, 
-									new Metal(Vec3(0.5*(1 + RANDOM_FLOAT), 0.5*(1 + RANDOM_FLOAT), 0.5*(1 + RANDOM_FLOAT)), 0.5*RANDOM_FLOAT));
-                }
-                else { 
+					list[i++] = new Sphere(center, 0.2,
+						new Metal(Vec3(0.5*(1 + RANDOM_FLOAT), 0.5*(1 + RANDOM_FLOAT), 0.5*(1 + RANDOM_FLOAT)), 0.5*RANDOM_FLOAT));
+				}
+				else {
 					/** GLASS **/
-                    list[i++] = new Sphere(center, 0.2, new Dielectric(1.5));
-                }
-            }
-        }
-    }
+					list[i++] = new Sphere(center, 0.2, new Dielectric(1.5));
+				}
+			}
+		}
+	}
 
-    list[i++] = new Sphere(Vec3(0, 1, 0), 1.0, new Dielectric(1.5));
-    list[i++] = new Sphere(Vec3(-4, 1, 0), 1.0, new Lambertian(new ConstantTexture(Vec3(0.4, 0.2, 0.1))));
-    list[i++] = new Sphere(Vec3(4, 1, 0), 1.0, new Metal(Vec3(0.7, 0.6, 0.5), 0.0));
+	list[i++] = new Sphere(Vec3(0, 1, 0), 1.0, new Dielectric(1.5));
+	list[i++] = new Sphere(Vec3(-4, 1, 0), 1.0, new Lambertian(new ConstantTexture(Vec3(0.4, 0.2, 0.1))));
+	list[i++] = new Sphere(Vec3(4, 1, 0), 1.0, new Metal(Vec3(0.7, 0.6, 0.5), 0.0));
 
-    return new BVH_Node(list, i, 0.0, 1.0);
+	return new BVH_Node(list, i, 0.0, 1.0);
 }
 
 
 /** IMG LOADING WORLD **/
-Hitable *earth() 
+Hitable *earth()
 {
 	int xPixels, yPixels, nn;
 	//unsigned char *tex_data = stbi_load("tiled.jpg", &nx, &ny, &nn, 0);
@@ -322,34 +361,18 @@ Hitable *finalTest()
 	list[l++] = new Sphere(Vec3(220, 280, 300), 80, new Lambertian(pertext));
 	int numOfSpheres = 100;
 	for (int j = 0; j < numOfSpheres; j++) {
-		boxlist2[j] = new Sphere(Vec3(165 *RANDOM_FLOAT, 165 * RANDOM_FLOAT, 165 * RANDOM_FLOAT), 10, white);
+		boxlist2[j] = new Sphere(Vec3(165 * RANDOM_FLOAT, 165 * RANDOM_FLOAT, 165 * RANDOM_FLOAT), 10, white);
 	}
 	list[l++] = new Translate(new RotateY(new BVH_Node(boxlist2, numOfSpheres, 0.0, 1.0), 15), Vec3(-100, 270, 395));
 	return new HitableList(list, l);
 }
 
-int main() 
+int main()
 {
-	std::ofstream output("output.ppm");
-
-    int xPixels = 800;
-    int yPixels = 400;
-    int numOfSpheres = 100;
+	int xPixels = 800;
+	int yPixels = 400;
+	int numOfSpheres = 100;
 	
-	/**** CMD Output to see it being made ****/
-
-	/** The P3 means the colors are in ASCII.
-	  * The xPixels is how many collums.
-	  * The yPixels is how many rows.
-	  * The final is 255 for max colour.
-	  * The Next time this is done is for the RGB triplets. **/
-	std::cout << "P3\n" << xPixels << " " << yPixels << "\n255\n";
-	
-	/** Outputting to a PPM file to view it elsewhere **/
-	if (output.is_open())
-	{
-		output << "P3\n" << xPixels << " " << yPixels << "\n255\n";
-	}
 
 	/**** WORLD SELECT ****/
 	/** CORNELL **/
@@ -362,7 +385,7 @@ int main()
 	//Hitable *world = twoPerlinSpheres();
 	//Hitable *world = earth();
 	//Hitable *world = sampleLight();
-	
+
 	/** RANDOM / FINAL TEST**/
 	//Hitable *world = randomScene();
 	Hitable *world = final();
@@ -370,36 +393,15 @@ int main()
 	Vec3 lookFrom(478.0f, 278.0f, -600.0f);
 	Vec3 lookAt(278.0f, 278.0f, 0.0f);
 
-    float DistanceToFocus = 10.0f;
-    float Aperture = 0.0f;
+	float DistanceToFocus = 10.0f;
+	float Aperture = 0.0f;
 	float FOV = 40.0f;
 
-    Camera camera(lookFrom, lookAt, Vec3(0.0f, 1.0f, 0.0f), FOV, float(xPixels) / float(yPixels), Aperture, DistanceToFocus, 0.0f, 1.0f);
+	Camera camera(lookFrom, lookAt, Vec3(0.0f, 1.0f, 0.0f), FOV, float(xPixels) / float(yPixels), Aperture, DistanceToFocus, 0.0f, 1.0f);
 
-    for (int j = (yPixels -1); j >= 0; j--) {
-        for (int i = 0; i < xPixels; i++) {
-			Vec3 colour(0.0f, 0.0f, 0.0f);
-            for (int spheres = 0; spheres < numOfSpheres; spheres++) {
-                float u = float(i + RANDOM_FLOAT) / float(xPixels);
-                float v = float(j + RANDOM_FLOAT) / float(yPixels);
-                Ray ray = camera.GetRay(u, v);
-				Vec3 p = ray.pointAtParameter(2.0f);
-                colour += Colour(ray, world, 0);
-            }
-            colour /= float(numOfSpheres);
-            colour = Vec3(sqrt(colour[0]), sqrt(colour[1]), sqrt(colour[2]));
-            int outputR = int(255*colour[0]);
-            int outputG = int(255*colour[1]);
-            int outputB = int(255*colour[2]);
-
-			/**** CMD Output to see it being made ****/
-			/** These are those RGB triplets mentioned before. **/
-            std::cout << outputR << " " << outputG << " " << outputB << "\n";
-
-			/** Outputting to a PPM file to view it elsewhere **/
-			{
-				output << outputR << " " << outputG << " " << outputB << "\n";
-			}
-        }
-    }
+	for (int j = (yPixels - 1); j >= 0; j--) {
+		for (int i = 0; i < xPixels; i++) {
+			ProcessRay(camera, i, j, xPixels, yPixels, numOfSpheres, world);
+		}
+	}
 }
