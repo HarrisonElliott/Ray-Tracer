@@ -2,6 +2,7 @@
 #include <fstream>
 #include <random>
 #include <vector>
+#include <thread>
 
 /** MY INCLUDES **/
 #include "AARect.h"
@@ -21,7 +22,14 @@
 #include "stb_image.h"
 
 #define RANDOM_FLOAT ((double)rand() / RAND_MAX)
+#define THREADS std::thread::hardware_concurrency()
 
+/** Poor Practice But needed. **/
+const int xPixels = 800;
+const int yPixels = 800;
+Vec3 Pixels[xPixels][yPixels];
+
+#define BLOCK_LENGTH (xPixels / THREADS)
 
 Vec3 Colour(const Ray& ray, Hitable *world, int depth)
 {
@@ -42,14 +50,13 @@ Vec3 Colour(const Ray& ray, Hitable *world, int depth)
 	}
 }
 
-void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int numOfSpheres, Hitable* world,
-				std::vector<Vec3> *Pixels)
+void ProcessRay(Camera camera, int x, int y, int xPixels, int yPixels, int numOfSpheres, Hitable* world)
 {
 	Vec3 colour(0.0f, 0.0f, 0.0f);
 	for (int spheres = 0; spheres < numOfSpheres; spheres++) 
 	{
-		float u = float(i + RANDOM_FLOAT) / float(xPixels);
-		float v = float(j + RANDOM_FLOAT) / float(yPixels);
+		float u = float(x + RANDOM_FLOAT) / float(xPixels);
+		float v = float(y + RANDOM_FLOAT) / float(yPixels);
 		Ray ray = camera.GetRay(u, v);
 		Vec3 p = ray.pointAtParameter(2.0f);
 		colour += Colour(ray, world, 0);
@@ -60,7 +67,17 @@ void ProcessRay(Camera camera, int i, int j, float xPixels, float yPixels, int n
 	int outputG = int(255 * colour[1]);
 	int outputB = int(255 * colour[2]);
 
-	Pixels->insert(Pixels->begin() + (i + j), Vec3(outputR, outputG, outputB));
+	Pixels[x][y] = Vec3(outputR, outputG, outputB);
+}
+
+/** Only works for even number of threads **/
+void ProcessRaysInRange(Camera camera, int t, int xPixels, int yPixels, int numOfSpheres, Hitable* world)
+{	
+	for (int y = (yPixels - 1); y >= 0; y--) {
+		for (int x = (t - 1) * BLOCK_LENGTH; x < t * BLOCK_LENGTH; x++) {
+			ProcessRay(camera, x, y, xPixels, yPixels, numOfSpheres, world);
+		}
+	}
 }
 
 /** CORNELL WORLDS **/
@@ -258,8 +275,8 @@ Hitable *final()
 {
 	int numOfBoxes = 20;
 	Hitable **list = new Hitable*[30];
-	Hitable **boxlist = new Hitable*[1000];
-	Hitable **boxlist2 = new Hitable*[1000];
+	Hitable **boxlist = new Hitable*[700];
+	Hitable **boxlist2 = new Hitable*[700];
 	Material *white = new Lambertian(new ConstantTexture(Vec3(0.73f, 0.73f, 0.73f)));
 	Material *ground = new Lambertian(new ConstantTexture(Vec3(0.48f, 0.83f, 0.53f)));
 	int boxes = 0;
@@ -352,8 +369,6 @@ Hitable *finalTest()
 
 int main()
 {
-	int xPixels = 200;
-	int yPixels = 200;
 	int numOfSpheres = 100;
 	
 	/**** WORLD SELECT ****/
@@ -363,13 +378,13 @@ int main()
 	//Hitable *world = cornell_balls();
 	//Hitable *world = cornell_final();
 
-	//Hitable *world = twoSpheres();		 // No Longer Works
-	//Hitable *world = twoPerlinSpheres();	 // No Longer Works
-	//Hitable *world = earth();				 // No Longer Works
-	//Hitable *world = sampleLight();		 // No Longer Works
+	//Hitable *world = twoSpheres();		 // No Longer Working
+	//Hitable *world = twoPerlinSpheres();	 // No Longer Working
+	//Hitable *world = earth();				 // No Longer Working
+	//Hitable *world = sampleLight();		 // No Longer Working
 
 	/** RANDOM / FINAL TEST**/
-	//Hitable *world = randomScene();		 // No Longer Works
+	//Hitable *world = randomScene();		 // No Longer Working
 	Hitable *world = final();
 
 	Vec3 lookFrom(478.0f, 278.0f, -600.0f);
@@ -379,30 +394,40 @@ int main()
 	float Aperture = 0.0f;
 	float FOV = 40.0f;
 
-	std::vector<Vec3> Pixels(xPixels * yPixels);
 	Camera camera(lookFrom, lookAt, Vec3(0.0f, 1.0f, 0.0f), FOV, float(xPixels) / float(yPixels), Aperture, DistanceToFocus, 0.0f, 1.0f);
 
-	for (int j = (yPixels - 1); j >= 0; j--) {
-		for (int i = 0; i < xPixels; i++) {
-			ProcessRay(camera, i, j, xPixels, yPixels, numOfSpheres, world, &Pixels);
-		}
+
+	/** MULTI-THREADING **/
+	std::vector<std::thread> processThreads;
+	for (int t = 1; t <= THREADS; t++){
+		processThreads.push_back(std::move(std::thread(ProcessRaysInRange, camera, t, xPixels, yPixels, numOfSpheres, world)));
+	}
+	for (int t = 0; t < THREADS; t++) {
+		processThreads.at(t).join();
 	}
 
-	/**** Viewable Copy of Output ****/
-	std::ofstream output("output.ppm");
 
+	//std::cout << "Size of array : " << Pixels.size() << std::endl;
+	//std::cout << "Random test : " << Pixels.at(50).r() << " " << Pixels.at(50).g() << " " << Pixels.at(50).b() << std::endl;
+
+	/**** Viewable Copy of Output ****/
+ 	std::ofstream output("output.ppm");
 	/** The P3 means the colors are in ASCII.
 	  * The xPixels is how many collums.
 	  * The yPixels is how many rows.
 	  * The final is 255 for max colour.
 	  * The Next time this is done is for the RGB triplets.
 	  * Outputting to a PPM file to view it elsewhere. **/
-	if (output.is_open()) {
-		output << "P3\n" << xPixels << " " << yPixels << "\n255\n";
-	}
+	if (output.is_open()) { output << "P3\n" << xPixels << " " << yPixels << "\n255\n"; }
+	if (output.bad()) { std::cout << "Writing to file failed" << std::endl; }
+
 	/** These are those RGB triplets mentioned. **/
-	for (Vec3 pixel : Pixels) {
-		output << pixel.r() << " " << pixel.g() << " " << pixel.b() << "\n";
+	for (int y = yPixels; y >= 0; y--) {
+		for (int x = 0; x < xPixels; x++) {
+			output << (int)Pixels[x][y].r() << " " << (int)Pixels[x][y].g() << " " << (int)Pixels[x][y].b() << "\n";
+		}
 	}
+	output.close();
 	/** END **/
+	return 0;
 }
